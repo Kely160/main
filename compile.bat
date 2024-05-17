@@ -18,4 +18,4 @@ REM Création du fichier JAR
 jar cvf %JAR_FILE% -C %CLASSES_DIR% .
 
 REM supprimer le dossier contenant les .classes 
-rmdir /s /q  %CLASSES_DIR%
+REM rmdir /s /q  %CLASSES_DIR%
