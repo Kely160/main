@@ -1,43 +1,61 @@
 package controller;
 
-import java.io.*;
-import java.util.*;
+import java.io.File;
+import java.io.IOException;
+import java.io.PrintWriter;
+import java.lang.reflect.Method;
 import java.net.URL;
+import java.util.ArrayList;
+import java.util.Enumeration;
+import java.util.HashMap;
 import java.util.List;
-import jakarta.servlet.*;
-import jakarta.servlet.http.*;
-import annotation.*;
+import java.util.Map;
+
+import jakarta.servlet.ServletConfig;
+import jakarta.servlet.ServletContext;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServlet;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import annotation.AnnotationController;
+import annotation.AnnotationMethode;
 
 public class FrontController extends HttpServlet {
-    boolean checked = false;
-    List<String> nomControllers = new ArrayList<>();
+    HashMap<String, Map<String, List<String>>> urlMethodMap;
 
-    public void processRequest(HttpServletRequest req, HttpServletResponse res) throws ServletException, IOException { 
-        if (!checked) {
-            scanControllerClasses("controller");
-        }
-
-        try {
-            res.setContentType("text/html");
-            PrintWriter out = res.getWriter();
-            out.println("<html>");
-            out.println("<head><title>Path</title></head>");
-            out.println("<body>");
-            out.println("<h1>FrontController</h1>");
-            out.close();
-            if (nomControllers.size() != 0) {
-                for (String nomController : nomControllers) {
-                    out.println("<p> Controller: " + nomController + "</p>");
-                }
-            }
-            out.println("</body></html>");
-        } catch (Exception e) {}
+    @Override
+    public void init(ServletConfig conf) throws ServletException {
+        super.init(conf);
+        urlMethodMap = new HashMap<>();
+        initializeControllers();
     }
 
-    private void scanControllerClasses(String p) {
+    protected void processRequest(HttpServletRequest request, HttpServletResponse response)
+            throws ServletException, IOException {
+        response.setContentType("text/html;charset=UTF-8");
+
+        PrintWriter out = response.getWriter();
+        String requestPath = request.getServletPath();
+
+        out.println("chemin: " + requestPath);
+
+        if (urlMethodMap.containsKey(requestPath)) {
+            Map<String, List<String>> controllerMethodMap = urlMethodMap.get(requestPath);
+            for (Map.Entry<String, List<String>> entry : controllerMethodMap.entrySet()) {
+                String controller = entry.getKey();
+                List<String> methods = entry.getValue();
+                out.println("<p>Controller: " + controller + " ; ");
+                out.println("Methods: " + methods + "</p>");
+            }
+        } else {
+            out.println("Il n'y a pas de méthode associée à ce chemin");
+        }
+    }
+
+    private void initializeControllers() {
         try {
             ServletContext context = getServletContext();
-            String packageName = context.getInitParameter(p);
+            String packageName = context.getInitParameter("Controller");
 
             ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
             Enumeration<URL> resources = classLoader.getResources(packageName.replace('.', '/'));
@@ -49,8 +67,6 @@ public class FrontController extends HttpServlet {
                     scanControllers(file, packageName);
                 }
             }
-
-            checked = true;
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -70,11 +86,35 @@ public class FrontController extends HttpServlet {
             if (file.isDirectory()) {
                 scanControllers(file, packageName + "." + file.getName());
             } else if (file.getName().endsWith(".class")) {
-                String className = packageName + '.' + file.getName().substring(0, file.getName().length() - 6);
+                String className = packageName + "." + file.getName().substring(0, file.getName().length() - 6);
                 try {
                     Class<?> clazz = Class.forName(className);
-                    if (clazz.isAnnotationPresent(Controller.class)) {
-                        nomControllers.add(className);
+                    if (clazz.isAnnotationPresent(AnnotationController.class)) {
+                        Method[] methods = clazz.getDeclaredMethods();
+                        for (Method method : methods) {
+                            if (method.isAnnotationPresent(AnnotationMethode.class)) {
+                                AnnotationMethode annotation = method.getAnnotation(AnnotationMethode.class);
+                                String url = annotation.url();
+                                String methodName = method.getName();
+
+                                if (urlMethodMap.containsKey(url)) {
+                                    Map<String, List<String>> controllerMethodMap = urlMethodMap.get(url);
+                                    if (controllerMethodMap.containsKey(className)) {
+                                        controllerMethodMap.get(className).add(methodName);
+                                    } else {
+                                        List<String> methodList = new ArrayList<>();
+                                        methodList.add(methodName);
+                                        controllerMethodMap.put(className, methodList);
+                                    }
+                                } else {
+                                    Map<String, List<String>> controllerMethodMap = new HashMap<>();
+                                    List<String> methodList = new ArrayList<>();
+                                    methodList.add(methodName);
+                                    controllerMethodMap.put(className, methodList);
+                                    urlMethodMap.put(url, controllerMethodMap);
+                                }
+                            }
+                        }
                     }
                 } catch (ClassNotFoundException e) {
                     e.printStackTrace();
@@ -83,11 +123,15 @@ public class FrontController extends HttpServlet {
         }
     }
 
-    public void doGet(HttpServletRequest req, HttpServletResponse res) throws ServletException, IOException { 
-        processRequest(req, res);
+    @Override
+    protected void doGet(HttpServletRequest request, HttpServletResponse response)
+            throws ServletException, IOException {
+        processRequest(request, response);
     }
 
-    public void doPost(HttpServletRequest req, HttpServletResponse res) throws ServletException, IOException { 
-        processRequest(req, res);
+    @Override
+    protected void doPost(HttpServletRequest request, HttpServletResponse response)
+            throws ServletException, IOException {
+        processRequest(request, response);
     }
 }
