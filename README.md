@@ -1,8 +1,9 @@
 1 - Ajouter le framework.jar dans le lib de votre projet
-2 - Toutes les classes controllers doivent etre annotee : `@Controller`
+2 - Toutes les classes controllers doivent etre annotee : `@AnnotationController`
 3 - Principalement, toutes les controllers doivent etre dans le meme package `nom_package`
 4 - Dans votre fichier `web.xml` ajouter les lignes suivantes :
   `<context-param>
       <param-name>Controller</param-name>
       <param-value>nom_package</param-value>
    </context-param>`
+5 - Pour acceder au methode on peut annoter chaque methode `@AnnotationMethdoe('/url')
