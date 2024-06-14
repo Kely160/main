@@ -1,10 +1,10 @@
 @echo off
 
 REM Declaration des variables
-    set nom_projet=gogo
-    set lib=C:\Users\ME-PC\Documents\GitHub\lib
-    set src=C:\Users\ME-PC\Documents\GitHub\main\src
-    set temp=C:\Users\ME-PC\Documents\GitHub\temp
+    set nom_projet=framework
+    set lib=C:\Program Files\Apache Software Foundation\Tomcat 10.1\lib
+    set src=C:\Users\itu\Documents\GitHub\main\src
+    set temp=C:\Users\itu\Documents\GitHub\test\temp
 
     mkdir %temp%
 REM compilation du code source
@@ -17,4 +17,4 @@ REM Convertir le repertoire temp en .jar
 
     rmdir %temp%
 
-xcopy /y %nom_projet%.jar "C:\Users\ME-PC\Documents\GitHub\SprintTest2\lib"
+xcopy /y %nom_projet%.jar "C:\Users\itu\Desktop\S4\WebDynamique\SprintTest2"
