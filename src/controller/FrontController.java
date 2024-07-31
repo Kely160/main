@@ -2,6 +2,8 @@ package controller;
 
 import java.io.IOException;
 import java.io.PrintWriter;
+import java.lang.reflect.Field;
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
 
@@ -9,10 +11,14 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import jakarta.servlet.http.HttpSession;
+import util.CustomerSession;
 import util.Mapping;
 import util.ModelView;
 import annotation.Controller;
+import annotation.FieldAnnotation;
 import annotation.Get;
+import annotation.ObjectParam;
 import annotation.Post;
 import annotation.RequestParam;
 
@@ -32,7 +38,7 @@ public class FrontController extends HttpServlet {
     private boolean initialized = false;
 
     protected void processRequest(HttpServletRequest request, HttpServletResponse response)
-            throws ServletException, IOException {
+        throws ServletException, IOException {
         response.setContentType("text/html;charset=UTF-8");
 
         synchronized (this) {
@@ -78,30 +84,67 @@ public class FrontController extends HttpServlet {
 
                 try {
                     Class<?> clazz = Class.forName(map.getKey());
-                    Method[] meth = clazz.getDeclaredMethods();
-                    Method method=null;
-
-                    for (Method method1 : meth) {
-                        if(method1.getName().compareTo(map.getValue())==0){
-                            method=method1;
+                    Method method = null;
+                    for (Method m : clazz.getDeclaredMethods()) {
+                        if (m.getName().equals(map.getValue())) {
+                            method = m;
+                            break;
                         }
                     }
-                    Object controllerInstance = clazz.getDeclaredConstructor().newInstance();
-                    Object result = method.invoke(controllerInstance, getMethodParameters(method, request));
 
-                    if (result instanceof String) {
-                        out.println("<br>Method Invocation Result: " + result);
-                    } else if (result instanceof ModelView) {
-                        ModelView modelAndView = (ModelView) result;
-                        for (String key : modelAndView.getData().keySet()) {
-                            request.setAttribute(key, modelAndView.getData().get(key));
+                    if (method == null) {
+                        throw new NoSuchMethodException("Method " + map.getValue() + " not found in class " + map.getKey());
+                    }
+
+                    try {
+                        Object controllerInstance = clazz.getDeclaredConstructor().newInstance();
+                        Field[] fields = clazz.getDeclaredFields();
+                        
+                        for (Field field : fields) {
+                            if (field.getType() == CustomerSession.class) {
+                                field.setAccessible(true);
+                                String capitalizedFieldName = capitalizeFirstLetter(field.getName());
+                                Method setCustomerSessionMethod = clazz.getMethod("set" + capitalizedFieldName, CustomerSession.class);
+                                CustomerSession customerSession = new CustomerSession();
+                                setCustomerSessionMethod.invoke(controllerInstance, customerSession);
+                            }
                         }
-                        request.getRequestDispatcher(modelAndView.getUrl()).forward(request, response);
-                        return;
+                        Object[] methodParams = getMethodParameters(method, request);
+
+                        Object result = method.invoke(controllerInstance, methodParams);
+
+                        for (Object param : methodParams) {
+                            if (param instanceof CustomerSession) {
+                                synchronizeSession(request.getSession(), (CustomerSession) param);
+                                out.println("<p>Session synchronized</p>");
+                            }
+                        }
+
+                        if (result instanceof String) {
+                            out.println("<br>Method Invocation Result: " + result);
+                        } 
+                        else if (result instanceof ModelView) {
+                            ModelView modelAndView = (ModelView) result;
+                            for (String key : modelAndView.getData().keySet()) {
+                                request.setAttribute(key, modelAndView.getData().get(key));
+                            }
+                            request.getRequestDispatcher(modelAndView.getUrl()).forward(request, response);
+                            return;
+                        }
+                    } catch (InvocationTargetException e) {
+                        Throwable cause = e.getCause();
+                        if(cause instanceof Exception){
+                            throw (Exception) cause;
+                        }
+                        else {
+                            throw new Exception("Erreur lors de l'invocation : "+cause.getMessage());
+                        }
                     }
                 } catch (Exception e) {
                     out.println("Error invoking method: " + e.getMessage());
-                    e.printStackTrace();
+                    for (StackTraceElement element : e.getStackTrace()) {
+                        out.println(element.toString());
+                    }
                 }
             } else {
                 out.println("<p>No associated method found for this URL.</p>");
@@ -111,6 +154,13 @@ public class FrontController extends HttpServlet {
             out.println("</html>");
         }
     }
+
+    private String capitalizeFirstLetter(String str) {
+        if (str == null || str.isEmpty()) {
+            return str;
+        }
+        return str.substring(0, 1).toUpperCase() + str.substring(1);
+    }    
 
     private void initControllers(HttpServletRequest request) throws Exception {
         ServletContext context = getServletContext();
@@ -140,7 +190,7 @@ public class FrontController extends HttpServlet {
         }
 
         if (controllerList.isEmpty()) {
-            throw new Exception("No classes annotated with @AnnotationController found in package " + packageName);
+            throw new Exception("No classes annotated with @Controller found in package " + packageName);
         }
     }
 
@@ -200,29 +250,91 @@ public class FrontController extends HttpServlet {
     }
     
 
-    private Object[] getMethodParameters(Method method, HttpServletRequest request) {
+    private Object[] getMethodParameters(Method method, HttpServletRequest request) throws Exception {
         Parameter[] parameters = method.getParameters();
         Object[] paramValues = new Object[parameters.length];
 
         for (int i = 0; i < parameters.length; i++) {
             RequestParam requestParam = parameters[i].getAnnotation(RequestParam.class);
+            ObjectParam objectParam = parameters[i].getAnnotation(ObjectParam.class);
             if (requestParam != null) {
                 String paramName = requestParam.value();
                 String paramValue = request.getParameter(paramName);
  
                 paramValues[i] = convertParameterValue(paramValue, parameters[i].getType());
-            } else {
-                Class<?> paramType = parameters[i].getType();
-                if (paramType.equals(HttpServletRequest.class)) {
-                    paramValues[i] = request;
-                } 
-                else{
-                    paramValues[i] = null; 
+            } 
+            else if(objectParam != null){
+                String objectName = objectParam.value();
+                Class<?> classe = parameters[i].getType();
+                Object o = classe.getDeclaredConstructor().newInstance();
+                Map<String, String[]> parametreMap = request.getParameterMap();
+                for(Map.Entry<String, String[]> entry : parametreMap.entrySet()){
+                    String paramName = entry.getKey();
+                    String[] tab = paramName.split("\\.");
+                    
+                    String nomParam = tab[0];
+                    String field = tab[1];
+                    if(tab.length < 2) continue;
+                    Field[] fields = classe.getDeclaredFields();
+                    for(Field f : fields){
+                        String fieldValue = null;
+                        FieldAnnotation fieldAnnotation = f.getAnnotation(FieldAnnotation.class);
+                        if(fieldAnnotation != null && f.getName().equalsIgnoreCase(fieldAnnotation.name())){
+                            fieldValue = request.getParameter(paramName);
+                        }
+                        else if(f.getName().equalsIgnoreCase(field)){
+                            fieldValue = request.getParameter(paramName);
+                        }
+
+                        if(fieldValue != null){
+                            f.setAccessible(true);
+                            f.set(o, convertParameterValue(fieldValue, f.getType()));
+                        }
+                    }
                 }
+                paramValues[i] = o;
+            }
+            else if (parameters[i].getType() == CustomerSession.class) {
+                HttpSession session = request.getSession();
+                CustomerSession customerSession = new CustomerSession();
+                Enumeration<String> attributeNames = session.getAttributeNames();
+                HashMap<String, Object> valMap = new HashMap<>();
+                while (attributeNames.hasMoreElements()) {
+                    String attributeName = attributeNames.nextElement();
+                    // customerSession.add(attributeName, session.getAttribute(attributeName));
+                    valMap.put(attributeName, session.getAttribute(attributeName));
+                }
+                customerSession.setValues(valMap);
+                paramValues[i] = customerSession;
+            }
+
+            if(request == null && objectParam == null && parameters[i].getType() != CustomerSession.class){
+                throw new Exception("ETU002517, Type de parametre invalide");
             }
         }
         return paramValues;
     }
+
+    private void synchronizeSession(HttpSession httpSession, CustomerSession customerSession) {
+        Map<String, Object> values = customerSession.getValues();
+        Enumeration<String> httEnumeration = httpSession.getAttributeNames();
+        List<String> attributeRemove = new ArrayList<>();
+
+        while (httEnumeration.hasMoreElements()) {
+            String attributeName = httEnumeration.nextElement();
+            if (!values.containsKey(attributeName)) {
+                attributeRemove.add(attributeName);
+            }
+        }
+
+        for(String attribute : attributeRemove){
+            httpSession.removeAttribute(attribute);
+        }
+
+        for (Map.Entry<String, Object> entry : values.entrySet()) {
+            httpSession.setAttribute(entry.getKey(), entry.getValue());
+        }
+    }    
 
     private Object convertParameterValue(String paramValue, Class<?> targetType) {
         if (paramValue == null) {
