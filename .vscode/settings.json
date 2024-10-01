@@ -1,9 +1,6 @@
 {
     "java.project.referencedLibraries": [
-        "c:\\Users\\ME-PC\\Documents\\GitHub\\lib\\gson-2.10.jar",
+        "lib/**/*.jar",
         "c:\\Users\\ME-PC\\Documents\\GitHub\\lib\\servlet-api.jar"
-    ],
-    "java.project.sourcePaths": [
-        "src"
     ]
 }

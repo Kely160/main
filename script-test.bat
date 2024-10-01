@@ -1,13 +1,13 @@
 @echo off
 
 REM Declaration des variables
-    set nom_projet=framework
-    set temp=C:\Users\KEVIN\Documents\GitHub\temp
-    set web=C:\Users\KEVIN\Documents\GitHub\web
-    set xml=C:\Users\KEVIN\Documents\GitHub\xml
-    set lib=C:\Users\KEVIN\Documents\GitHub\lib
+    set nom_projet=sprint5
+    set temp=C:\Users\itu\Documents\GitHub\test\temp
+    set web=C:\Users\itu\Desktop\S4\WebDynamique\SprintTest2\web
+    set xml=C:\Users\itu\Desktop\S4\WebDynamique\SprintTest2\web.xml
+    set lib=C:\Users\itu\Desktop\S4\WebDynamique\SprintTest2\lib
     set war=.\
-    set src=C:\Users\KEVIN\Documents\GitHub\src
+    set src=C:\Users\itu\Desktop\S4\WebDynamique\SprintTest2\src
 
 REM Suppression de temp si il existe
     rmdir /s /q %temp%
