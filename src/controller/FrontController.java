@@ -17,13 +17,17 @@ import util.Mapping;
 import util.ModelView;
 import annotation.Controller;
 import annotation.FieldAnnotation;
-import annotation.Get;
 import annotation.ObjectParam;
 import annotation.Post;
 import annotation.RequestParam;
+import annotation.Restapi;
+import annotation.Url;
 
 import java.util.List;
 import java.util.Map;
+
+import com.google.gson.Gson;
+
 import java.util.ArrayList;
 import jakarta.servlet.ServletContext;
 import java.io.File;
@@ -36,6 +40,7 @@ public class FrontController extends HttpServlet {
     private List<String> controllerList = new ArrayList<>();
     private Map<String, Mapping> urlMappings = new HashMap<>();
     private boolean initialized = false;
+    Gson gson = new Gson();
 
     protected void processRequest(HttpServletRequest request, HttpServletResponse response)
         throws ServletException, IOException {
@@ -63,7 +68,7 @@ public class FrontController extends HttpServlet {
             out.println("<!DOCTYPE html>");
             out.println("<html>");
             out.println("<head>");
-            out.println("<title>FrontController</title>");
+            out.println("<title>Framework</title>");
             out.println("</head>");
             out.println("<body>");
             out.println("<p><b>URL:</b> " + requestURL + "</p>");
@@ -96,6 +101,14 @@ public class FrontController extends HttpServlet {
                         throw new NoSuchMethodException("Method " + map.getValue() + " not found in class " + map.getKey());
                     }
 
+                    // Tester verb
+                    if (map.getVerb().equalsIgnoreCase(requestMethod)) {
+                        response.getWriter().write("La methode HTTP correspond : " + requestMethod);
+                    } 
+                    else {
+                        throw new Exception("La methode Http ne correspond pas a l'annotation de la methode");
+                    }
+
                     try {
                         Object controllerInstance = clazz.getDeclaredConstructor().newInstance();
                         Field[] fields = clazz.getDeclaredFields();
@@ -120,17 +133,34 @@ public class FrontController extends HttpServlet {
                             }
                         }
 
-                        if (result instanceof String) {
-                            out.println("<br>Method Invocation Result: " + result);
-                        } 
-                        else if (result instanceof ModelView) {
-                            ModelView modelAndView = (ModelView) result;
-                            for (String key : modelAndView.getData().keySet()) {
-                                request.setAttribute(key, modelAndView.getData().get(key));
+                        boolean isRestApi = method.isAnnotationPresent(Restapi.class);
+
+                        if (isRestApi) {
+                            response.setContentType("application/json;charset=UTF-8");
+                            String jsonResponse;
+                            if (result instanceof ModelView) {
+                                ModelView modelAndView = (ModelView) result;
+                                jsonResponse = gson.toJson(modelAndView.getData());
+                                out.println(jsonResponse);
+                            } else {
+                                jsonResponse = gson.toJson(result);
+                                out.println(jsonResponse);
                             }
-                            request.getRequestDispatcher(modelAndView.getUrl()).forward(request, response);
-                            return;
+                        }                         
+                        else {
+                            if (result instanceof String){
+                                out.println(result);
+                            }
+                            else if (result instanceof ModelView) {
+                                ModelView modelAndView = (ModelView) result;
+                                for (String key : modelAndView.getData().keySet()) {
+                                    request.setAttribute(key, modelAndView.getData().get(key));
+                                }
+                                request.getRequestDispatcher(modelAndView.getUrl()).forward(request, response);
+                                request.getMethod();
+                            }
                         }
+                        
                     } catch (InvocationTargetException e) {
                         Throwable cause = e.getCause();
                         if(cause instanceof Exception){
@@ -140,6 +170,7 @@ public class FrontController extends HttpServlet {
                             throw new Exception("Erreur lors de l'invocation : "+cause.getMessage());
                         }
                     }
+                        
                 } catch (Exception e) {
                     out.println("Error invoking method: " + e.getMessage());
                     for (StackTraceElement element : e.getStackTrace()) {
@@ -216,8 +247,8 @@ public class FrontController extends HttpServlet {
                         controllerList.add(className);
                         Method[] methods = clazz.getDeclaredMethods();
                         for (Method method : methods) {
-                            if (method.isAnnotationPresent(Get.class) || method.isAnnotationPresent(Post.class)) {
-                                validateAndRegisterMethod(clazz, method);
+                            if (method.isAnnotationPresent(Url.class)) {
+                                validationMethode(clazz, method);
                             }
                         }
                     }
@@ -228,21 +259,23 @@ public class FrontController extends HttpServlet {
         }
     }
 
-    private void validateAndRegisterMethod(Class<?> clazz, Method method) throws Exception {
+    private void validationMethode(Class<?> clazz, Method method) throws Exception {
         if (method.getReturnType().equals(String.class) || method.getReturnType().equals(ModelView.class)) {
-            String urlName = null;
-            if (method.isAnnotationPresent(Get.class)) {
-                Get getAnnotation = method.getAnnotation(Get.class);
-                urlName = getAnnotation.url();
-            } else if (method.isAnnotationPresent(Post.class)) {
-                Post postAnnotation = method.getAnnotation(Post.class);
-                urlName = postAnnotation.url();
+            String url = null;
+            if (method.isAnnotationPresent(Url.class)) {
+                Url getAnnotation = method.getAnnotation(Url.class);
+                url = getAnnotation.url();
             }
 
-            if (urlName != null && urlMappings.containsKey(urlName)) {
-                throw new Exception("URL " + urlName + " is already defined.");
-            } else if (urlName != null) {
-                urlMappings.put(urlName, new Mapping(clazz.getName(), method.getName()));
+            if (url != null && urlMappings.containsKey(url)) {
+                throw new Exception("URL " + url + " is already defined.");
+            } else if (url != null) {
+                if(method.isAnnotationPresent(Post.class)){
+                    urlMappings.put(url, new Mapping(clazz.getName(), method.getName(),"POST"));
+                }
+                else{
+                    urlMappings.put(url, new Mapping(clazz.getName(), method.getName(),"GET"));
+                }
             }
         } else {
             throw new Exception("Method return type must be String or ModelAndView.");
@@ -309,7 +342,7 @@ public class FrontController extends HttpServlet {
             }
 
             if(request == null && objectParam == null && parameters[i].getType() != CustomerSession.class){
-                throw new Exception("ETU002517, Type de parametre invalide");
+                throw new Exception("etu002513, Erreur: Parametre invalide");
             }
         }
         return paramValues;
