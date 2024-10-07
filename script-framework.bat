@@ -3,8 +3,8 @@
 REM Declaration des variables
     set nom_projet=framework
     set lib=C:\Program Files\Apache Software Foundation\Tomcat 10.1\lib
-    set src=C:\Users\itu\Documents\GitHub\main\src
-    set temp=C:\Users\itu\Documents\GitHub\test\temp
+    set src=C:\Users\KEVIN\Documents\GitHub\main\src
+    set temp=C:\Users\KEVIN\Documents\GitHub\test\temp
 
     mkdir %temp%
 REM compilation du code source
@@ -17,4 +17,4 @@ REM Convertir le repertoire temp en .jar
 
     rmdir %temp%
 
-xcopy /y %nom_projet%.jar "C:\Users\itu\Desktop\S4\WebDynamique\SprintTest2"
+xcopy /y %nom_projet%.jar "C:\Users\KEVIN\OneDrive\Bureau\Etudes\S5\S6_Framework\SprintTest2"
