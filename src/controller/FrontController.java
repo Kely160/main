@@ -342,7 +342,7 @@ public class FrontController extends HttpServlet {
             }
 
             if(request == null && objectParam == null && parameters[i].getType() != CustomerSession.class){
-                throw new Exception("etu002513, Erreur: Parametre invalide");
+                throw new Exception("etu 002513, Erreur: Parametre invalide");
             }
         }
         return paramValues;
